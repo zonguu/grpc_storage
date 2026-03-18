@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package kvstore;
+
+// KV存储服务定义
+service KVStore {
+    // 写入键值对
+    rpc Put (PutRequest) returns (PutResponse);
+    // 读取键值对
+    rpc Get (GetRequest) returns (GetResponse);
+}
+
+// 写入请求
+message PutRequest {
+    string key = 1;
+    string value = 2;
+}
+
+// 写入响应
+message PutResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// 读取请求
+message GetRequest {
+    string key = 1;
+}
+
+// 读取响应
+message GetResponse {
+    bool found = 1;
+    string value = 2;
+    string message = 3;
+}
