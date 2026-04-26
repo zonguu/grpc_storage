@@ -21,7 +21,7 @@ bool FileStorageEngine::Put(const std::string& key, const std::string& value) {
         return false;
     }
     data_[key] = value;
-    SaveToFile();
+    SaveToFileLocked();
     return true;
 }
 
@@ -46,7 +46,77 @@ bool FileStorageEngine::Delete(const std::string& key) {
     auto it = data_.find(key);
     if (it != data_.end()) {
         data_.erase(it);
-        SaveToFile();
+        SaveToFileLocked();
+        return true;
+    }
+    return false;
+}
+
+bool FileStorageEngine::Exists(const std::string& key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+        return false;
+    }
+    return data_.find(key) != data_.end();
+}
+
+size_t FileStorageEngine::BatchPut(const std::vector<KVItem>& items) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+        return 0;
+    }
+    for (const auto& item : items) {
+        data_[item.key] = item.value;
+    }
+    SaveToFileLocked();
+    return items.size();
+}
+
+size_t FileStorageEngine::BatchGet(const std::vector<std::string>& keys,
+                                   std::vector<KVItem>& items) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+        return 0;
+    }
+    items.clear();
+    items.reserve(keys.size());
+    size_t found = 0;
+    for (const auto& key : keys) {
+        auto it = data_.find(key);
+        if (it != data_.end()) {
+            items.push_back({it->first, it->second});
+            ++found;
+        }
+    }
+    return found;
+}
+
+size_t FileStorageEngine::BatchDelete(const std::vector<std::string>& keys) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+        return 0;
+    }
+    size_t deleted = 0;
+    for (const auto& key : keys) {
+        deleted += data_.erase(key);
+    }
+    if (deleted > 0) {
+        SaveToFileLocked();
+    }
+    return deleted;
+}
+
+bool FileStorageEngine::CompareAndSwap(const std::string& key,
+                                       const std::string& expected_value,
+                                       const std::string& new_value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+        return false;
+    }
+    auto it = data_.find(key);
+    if (it != data_.end() && it->second == expected_value) {
+        it->second = new_value;
+        SaveToFileLocked();
         return true;
     }
     return false;
@@ -55,7 +125,7 @@ bool FileStorageEngine::Delete(const std::string& key) {
 void FileStorageEngine::Close() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!closed_) {
-        SaveToFile();
+        SaveToFileLocked();
         closed_ = true;
     }
 }
@@ -81,15 +151,15 @@ void FileStorageEngine::LoadFromFile() {
     std::cout << "Loaded " << data_.size() << " entries from file." << std::endl;
 }
 
-void FileStorageEngine::SaveToFile() {
+void FileStorageEngine::SaveToFileLocked() {
     std::ofstream file(filename_, std::ios::trunc);
     if (!file.is_open()) {
         std::cerr << "Failed to open file for writing: " << filename_ << std::endl;
         return;
     }
 
-    for (const auto& [key, value] : data_) {
-        file << key << '\t' << value << '\n';
+    for (const auto& [k, v] : data_) {
+        file << k << '\t' << v << '\n';
     }
     file.close();
 }

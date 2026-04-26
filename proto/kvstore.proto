@@ -8,6 +8,24 @@ service KVStore {
     rpc Put (PutRequest) returns (PutResponse);
     // 读取键值对
     rpc Get (GetRequest) returns (GetResponse);
+    // 删除键值对
+    rpc Delete (DeleteRequest) returns (DeleteResponse);
+    // 检查键是否存在
+    rpc Exists (ExistsRequest) returns (ExistsResponse);
+    // 批量写入
+    rpc BatchPut (BatchPutRequest) returns (BatchPutResponse);
+    // 批量读取
+    rpc BatchGet (BatchGetRequest) returns (BatchGetResponse);
+    // 批量删除
+    rpc BatchDelete (BatchDeleteRequest) returns (BatchDeleteResponse);
+    // 比较并交换（CAS）
+    rpc CompareAndSwap (CASRequest) returns (CASResponse);
+}
+
+// 键值对消息
+message KVPair {
+    string key = 1;
+    string value = 2;
 }
 
 // 写入请求
@@ -32,4 +50,74 @@ message GetResponse {
     bool found = 1;
     string value = 2;
     string message = 3;
+}
+
+// 删除请求
+message DeleteRequest {
+    string key = 1;
+}
+
+// 删除响应
+message DeleteResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// 存在性检查请求
+message ExistsRequest {
+    string key = 1;
+}
+
+// 存在性检查响应
+message ExistsResponse {
+    bool exists = 1;
+}
+
+// 批量写入请求
+message BatchPutRequest {
+    repeated KVPair pairs = 1;
+}
+
+// 批量写入响应
+message BatchPutResponse {
+    uint32 succeeded_count = 1;
+    string message = 2;
+}
+
+// 批量读取请求
+message BatchGetRequest {
+    repeated string keys = 1;
+}
+
+// 批量读取响应
+message BatchGetResponse {
+    repeated KVPair pairs = 1;
+    uint32 found_count = 2;
+    uint32 missed_count = 3;
+}
+
+// 批量删除请求
+message BatchDeleteRequest {
+    repeated string keys = 1;
+}
+
+// 批量删除响应
+message BatchDeleteResponse {
+    uint32 deleted_count = 1;
+    string message = 2;
+}
+
+// CAS 请求
+message CASRequest {
+    string key = 1;
+    string expected_value = 2;
+    string new_value = 3;
+}
+
+// CAS 响应
+message CASResponse {
+    bool success = 1;
+    bool key_existed = 2;
+    string actual_value = 3;  // 失败时返回实际值，方便客户端决策
+    string message = 4;
 }

@@ -25,8 +25,57 @@ bool MemoryStorageEngine::Delete(const std::string& key) {
     return data_.erase(key) > 0;
 }
 
+bool MemoryStorageEngine::Exists(const std::string& key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return data_.find(key) != data_.end();
+}
+
+size_t MemoryStorageEngine::BatchPut(const std::vector<KVItem>& items) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& item : items) {
+        data_[item.key] = item.value;
+    }
+    return items.size();
+}
+
+size_t MemoryStorageEngine::BatchGet(const std::vector<std::string>& keys,
+                                     std::vector<KVItem>& items) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    items.clear();
+    items.reserve(keys.size());
+    size_t found = 0;
+    for (const auto& key : keys) {
+        auto it = data_.find(key);
+        if (it != data_.end()) {
+            items.push_back({it->first, it->second});
+            ++found;
+        }
+    }
+    return found;
+}
+
+size_t MemoryStorageEngine::BatchDelete(const std::vector<std::string>& keys) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    size_t deleted = 0;
+    for (const auto& key : keys) {
+        deleted += data_.erase(key);
+    }
+    return deleted;
+}
+
+bool MemoryStorageEngine::CompareAndSwap(const std::string& key,
+                                         const std::string& expected_value,
+                                         const std::string& new_value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = data_.find(key);
+    if (it != data_.end() && it->second == expected_value) {
+        it->second = new_value;
+        return true;
+    }
+    return false;
+}
+
 void MemoryStorageEngine::Close() {
-    // 内存引擎不需要特殊关闭操作
     std::cout << "Memory storage engine closed. " << data_.size() << " entries lost." << std::endl;
 }
 

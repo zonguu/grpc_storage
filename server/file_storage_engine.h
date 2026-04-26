@@ -22,14 +22,22 @@ public:
     bool Put(const std::string& key, const std::string& value) override;
     bool Get(const std::string& key, std::string& value) override;
     bool Delete(const std::string& key) override;
+    bool Exists(const std::string& key) override;
+    size_t BatchPut(const std::vector<KVItem>& items) override;
+    size_t BatchGet(const std::vector<std::string>& keys,
+                    std::vector<KVItem>& items) override;
+    size_t BatchDelete(const std::vector<std::string>& keys) override;
+    bool CompareAndSwap(const std::string& key,
+                        const std::string& expected_value,
+                        const std::string& new_value) override;
     void Close() override;
 
 private:
     // 从文件加载数据到内存
     void LoadFromFile();
     
-    // 将内存数据保存到文件
-    void SaveToFile();
+    // 将内存数据保存到文件（必须在已持有 mutex_ 的情况下调用）
+    void SaveToFileLocked();
 
     std::string filename_;
     std::unordered_map<std::string, std::string> data_;

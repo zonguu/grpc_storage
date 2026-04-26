@@ -14,8 +14,21 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
 
+using kvstore::BatchDeleteRequest;
+using kvstore::BatchDeleteResponse;
+using kvstore::BatchGetRequest;
+using kvstore::BatchGetResponse;
+using kvstore::BatchPutRequest;
+using kvstore::BatchPutResponse;
+using kvstore::CASRequest;
+using kvstore::CASResponse;
+using kvstore::DeleteRequest;
+using kvstore::DeleteResponse;
+using kvstore::ExistsRequest;
+using kvstore::ExistsResponse;
 using kvstore::GetRequest;
 using kvstore::GetResponse;
+using kvstore::KVPair;
 using kvstore::KVStore;
 using kvstore::PutRequest;
 using kvstore::PutResponse;
@@ -32,25 +45,19 @@ public:
     Status Put(ServerContext* context, 
                const PutRequest* request, 
                PutResponse* response) override {
-        std::cout << "Received Put request: key=" << request->key() 
-                  << ", value=" << request->value() << std::endl;
+        std::cout << "Put: key=" << request->key() << std::endl;
         
         bool success = storage_engine_->Put(request->key(), request->value());
         
         response->set_success(success);
-        if (success) {
-            response->set_message("Put successful");
-        } else {
-            response->set_message("Put failed");
-        }
-        
+        response->set_message(success ? "Put successful" : "Put failed");
         return Status::OK;
     }
 
     Status Get(ServerContext* context, 
                const GetRequest* request, 
                GetResponse* response) override {
-        std::cout << "Received Get request: key=" << request->key() << std::endl;
+        std::cout << "Get: key=" << request->key() << std::endl;
         
         std::string value;
         bool found = storage_engine_->Get(request->key(), value);
@@ -62,7 +69,102 @@ public:
         } else {
             response->set_message("Key not found");
         }
-        
+        return Status::OK;
+    }
+
+    Status Delete(ServerContext* context,
+                  const DeleteRequest* request,
+                  DeleteResponse* response) override {
+        std::cout << "Delete: key=" << request->key() << std::endl;
+
+        bool success = storage_engine_->Delete(request->key());
+
+        response->set_success(success);
+        response->set_message(success ? "Delete successful" : "Key not found");
+        return Status::OK;
+    }
+
+    Status Exists(ServerContext* context,
+                  const ExistsRequest* request,
+                  ExistsResponse* response) override {
+        std::cout << "Exists: key=" << request->key() << std::endl;
+
+        bool exists = storage_engine_->Exists(request->key());
+        response->set_exists(exists);
+        return Status::OK;
+    }
+
+    Status BatchPut(ServerContext* context,
+                    const BatchPutRequest* request,
+                    BatchPutResponse* response) override {
+        std::cout << "BatchPut: count=" << request->pairs_size() << std::endl;
+
+        std::vector<KVItem> items;
+        items.reserve(request->pairs_size());
+        for (const auto& p : request->pairs()) {
+            items.push_back({p.key(), p.value()});
+        }
+
+        size_t count = storage_engine_->BatchPut(items);
+        response->set_succeeded_count(static_cast<uint32_t>(count));
+        response->set_message("BatchPut completed");
+        return Status::OK;
+    }
+
+    Status BatchGet(ServerContext* context,
+                    const BatchGetRequest* request,
+                    BatchGetResponse* response) override {
+        std::cout << "BatchGet: count=" << request->keys_size() << std::endl;
+
+        std::vector<std::string> keys(request->keys().begin(), request->keys().end());
+        std::vector<KVItem> items;
+
+        size_t found = storage_engine_->BatchGet(keys, items);
+
+        for (const auto& item : items) {
+            KVPair* pair = response->add_pairs();
+            pair->set_key(item.key);
+            pair->set_value(item.value);
+        }
+        response->set_found_count(static_cast<uint32_t>(found));
+        response->set_missed_count(static_cast<uint32_t>(request->keys_size() - found));
+        return Status::OK;
+    }
+
+    Status BatchDelete(ServerContext* context,
+                       const BatchDeleteRequest* request,
+                       BatchDeleteResponse* response) override {
+        std::cout << "BatchDelete: count=" << request->keys_size() << std::endl;
+
+        std::vector<std::string> keys(request->keys().begin(), request->keys().end());
+        size_t deleted = storage_engine_->BatchDelete(keys);
+
+        response->set_deleted_count(static_cast<uint32_t>(deleted));
+        response->set_message("BatchDelete completed");
+        return Status::OK;
+    }
+
+    Status CompareAndSwap(ServerContext* context,
+                          const CASRequest* request,
+                          CASResponse* response) override {
+        std::cout << "CAS: key=" << request->key() << std::endl;
+
+        std::string actual;
+        bool key_existed = storage_engine_->Get(request->key(), actual);
+
+        bool success = storage_engine_->CompareAndSwap(
+            request->key(), request->expected_value(), request->new_value());
+
+        response->set_success(success);
+        response->set_key_existed(key_existed);
+        if (!success && key_existed) {
+            response->set_actual_value(actual);
+            response->set_message("CAS failed: value mismatch");
+        } else if (!success && !key_existed) {
+            response->set_message("CAS failed: key not found");
+        } else {
+            response->set_message("CAS successful");
+        }
         return Status::OK;
     }
 
@@ -99,7 +201,7 @@ void PrintUsage(const char* program) {
     std::cout << "  -h, --help      Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Arguments:" << std::endl;
-    std::cout << "  address         Server bind address (default: 0.0.0.0:50051)" << std::endl;
+    std::cout << "  address         Server bind address (default: 0.0.0.0:50052)" << std::endl;
     std::cout << "  data_file       Data file path for file storage (default: kvstore.dat)" << std::endl;
 }
 
