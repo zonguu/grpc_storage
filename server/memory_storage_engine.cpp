@@ -6,12 +6,14 @@ namespace kvstore {
 
 bool MemoryStorageEngine::Put(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
     data_[key] = value;
     return true;
 }
 
 bool MemoryStorageEngine::Get(const std::string& key, std::string& value) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
     auto it = data_.find(key);
     if (it != data_.end()) {
         value = it->second;
@@ -22,16 +24,19 @@ bool MemoryStorageEngine::Get(const std::string& key, std::string& value) {
 
 bool MemoryStorageEngine::Delete(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
     return data_.erase(key) > 0;
 }
 
 bool MemoryStorageEngine::Exists(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
     return data_.find(key) != data_.end();
 }
 
 size_t MemoryStorageEngine::BatchPut(const std::vector<KVItem>& items) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return 0;
     for (const auto& item : items) {
         data_[item.key] = item.value;
     }
@@ -41,6 +46,7 @@ size_t MemoryStorageEngine::BatchPut(const std::vector<KVItem>& items) {
 size_t MemoryStorageEngine::BatchGet(const std::vector<std::string>& keys,
                                      std::vector<KVItem>& items) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return 0;
     items.clear();
     items.reserve(keys.size());
     size_t found = 0;
@@ -56,6 +62,7 @@ size_t MemoryStorageEngine::BatchGet(const std::vector<std::string>& keys,
 
 size_t MemoryStorageEngine::BatchDelete(const std::vector<std::string>& keys) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return 0;
     size_t deleted = 0;
     for (const auto& key : keys) {
         deleted += data_.erase(key);
@@ -67,6 +74,7 @@ bool MemoryStorageEngine::CompareAndSwap(const std::string& key,
                                          const std::string& expected_value,
                                          const std::string& new_value) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) return false;
     auto it = data_.find(key);
     if (it != data_.end() && it->second == expected_value) {
         it->second = new_value;
@@ -76,7 +84,11 @@ bool MemoryStorageEngine::CompareAndSwap(const std::string& key,
 }
 
 void MemoryStorageEngine::Close() {
-    std::cout << "Memory storage engine closed. " << data_.size() << " entries lost." << std::endl;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!closed_) {
+        closed_ = true;
+        std::cout << "Memory storage engine closed. " << data_.size() << " entries lost." << std::endl;
+    }
 }
 
 void MemoryStorageEngine::Clear() {

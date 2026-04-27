@@ -249,11 +249,16 @@ int main(int argc, char** argv) {
     kvstore::KVStoreServiceImpl service(std::move(storage_engine));
 
     ServerBuilder builder;
-    builder.AddListeningPort(address, grpc::InsecureServerCredentials());
+    int selected_port = 0;
+    builder.AddListeningPort(address, grpc::InsecureServerCredentials(), &selected_port);
     builder.RegisterService(&service);
     std::unique_ptr<Server> server(builder.BuildAndStart());
     
-    std::cout << "KVStore Server listening on " << address << std::endl;
+    if (selected_port > 0) {
+        std::cout << "KVStore Server listening on 0.0.0.0:" << selected_port << std::endl;
+    } else {
+        std::cout << "KVStore Server listening on " << address << std::endl;
+    }
     if (storage_type == kvstore::StorageType::FILE) {
         std::cout << "Storage type: FILE (data_file: " << data_file << ")" << std::endl;
     } else {

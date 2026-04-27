@@ -10,9 +10,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 message(STATUS "Found Protobuf: ${Protobuf_VERSION}")
 message(STATUS "Found gRPC: ${gRPC_VERSION}")
+message(STATUS "Found GTest: ${GTest_VERSION}")
 
 # ============================================================================
 # 生成 Protobuf/gRPC 代码
@@ -78,3 +80,39 @@ add_executable(kvstore_client client/main.cpp)
 target_include_directories(kvstore_client PRIVATE ${PROTO_GENERATED_DIR})
 
 target_link_libraries(kvstore_client PRIVATE kvstore_proto)
+
+# ============================================================================
+# 测试
+# ============================================================================
+
+enable_testing()
+
+set(TEST_SOURCES
+    tests/test_utils.cpp
+    tests/engine_test.cpp
+    server/file_storage_engine.cpp
+    server/memory_storage_engine.cpp
+)
+
+add_executable(kvstore_tests ${TEST_SOURCES})
+
+target_include_directories(kvstore_tests PRIVATE
+    server
+    ${PROTO_GENERATED_DIR}
+)
+
+target_compile_definitions(kvstore_tests PRIVATE
+    KVSTORE_SERVER_PATH="$<TARGET_FILE:kvstore_server>"
+)
+
+target_link_libraries(kvstore_tests PRIVATE
+    kvstore_proto
+    GTest::gtest_main
+    GTest::gtest
+)
+
+# 添加 CTest 测试
+add_test(NAME kvstore_unit_tests COMMAND kvstore_tests)
+set_target_properties(kvstore_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/output
+)

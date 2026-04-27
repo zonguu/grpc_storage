@@ -42,6 +42,7 @@ public:
 private:
     std::unordered_map<std::string, std::string> data_;
     mutable std::mutex mutex_;
+    bool closed_ = false;
 };
 
 } // namespace kvstore
